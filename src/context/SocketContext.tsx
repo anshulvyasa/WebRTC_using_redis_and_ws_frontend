@@ -1,5 +1,12 @@
-import React, { createContext, useEffect, useRef, useState } from "react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useNavigate } from "react-router-dom";
+import { UserContext } from "./UserContext";
 
 interface Props {
   children: React.ReactNode;
@@ -8,51 +15,79 @@ interface Props {
 interface SocketContextType {
   socket: WebSocket | null;
 }
-export const WS_Server = "ws://localhost:8080";
+
 export const SocketContext = createContext<SocketContextType>({ socket: null });
 
 export const SocketProvider = ({ children }: Props) => {
   const [socket, setSocket] = useState<WebSocket | null>(null);
-  const socketRef = useRef<WebSocket | null>(null);
   const navigate = useNavigate();
+  const { username } = useContext(UserContext);
 
   useEffect(() => {
-    const ws = new WebSocket(WS_Server);
-    socketRef.current = ws;
+    console.log("username : ", username);
+    if (!username) {
+      if (socket) {
+        setSocket(null);
+      }
+      return;
+    }
+
+    const WEB_SERVER_URL = `ws://localhost:8080?userId=${encodeURIComponent(
+      username
+    )}`;
+    const ws = new WebSocket(WEB_SERVER_URL);
+    console.log("ws is ", ws);
     setSocket(ws);
 
     ws.onopen = () => {
-      console.log("WebSocket connected");
+      console.log("WebSocket Connected");
+      console.log("socket.current : ", socket?.readyState);
     };
 
-    ws.onclose = () => {
-      console.log("WebSocket closed");
-    };
-    return () => {
-      ws.close();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!socket) return;
-
-    const messageHandler = (event: MessageEvent) => {
+    ws.onmessage = (event: MessageEvent) => {
       try {
         const message = JSON.parse(event.data);
-        if (message.type === "room-created") {
-          navigate(`/room/${message.roomId}`);
+        console.log("message : ", message);
+        switch (message.type) {
+          case "room-created":
+            if (message.roomId && typeof message.roomId === "string") {
+              console.log(
+                `Room created, navigating to: /room/${message.roomId}`
+              );
+              navigate(`/room/${message.roomId}`);
+            } else {
+              console.warn(
+                "Invalid or missing roomId in room-created message:",
+                message
+              );
+            }
+            break;
+          default:
+            console.warn("Unknown message type received:", message);
+            break;
         }
       } catch (error) {
-        console.error("Error parsing message from server:", error);
+        console.error("Error while parsing message");
+        console.error(error);
       }
     };
 
-    socket.addEventListener("message", messageHandler);
+    ws.onclose = () => {
+      console.log("WebSocket Disconnected");
+      setSocket(null);
+    };
+
+    ws.onerror = (error) => {
+      console.error("Error in ws Connection ", error);
+    };
 
     return () => {
-      socket.removeEventListener("message", messageHandler);
+      if (socket) {
+        socket.close();
+        setSocket(null);
+      }
     };
-  }, [socket]);
+  }, [username]);
 
   return (
     <SocketContext.Provider value={{ socket }}>

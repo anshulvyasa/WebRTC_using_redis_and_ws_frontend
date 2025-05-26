@@ -8,6 +8,7 @@ const JoinRoomComponent: React.FC = () => {
   const [errorMessageRoom, setErrorMessageRoom] = useState<string | null>(null);
   const [errorMessageUser, setErrorMessageUser] = useState<string | null>(null);
 
+
   const handleJoinRoom = () => {
     const roomId = roomRef.current?.value;
     const username = userRef.current?.value;
